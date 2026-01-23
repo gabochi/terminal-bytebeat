@@ -2,7 +2,8 @@
 
 This is a small terminal bytebeat editor that I made with IA following my own preferences:
 
-- Minimalistic UI
+- Terminal based
+- Minimalistic 
 - Posfix/RPN
 - Hex values
 - Limited set of operators
@@ -27,17 +28,7 @@ python3 main.py
 
 ## Dockerfile
 
-You can use the docker version but need to adjust the samplerate to default in line 79:
-
-```python
-    samplerate=44100,
-```
-
-...instead of 
-
-```python
-    samplerate=SAMPLE_RATE,
-```
+You can use the docker version but surely you'll need to change the samplerate in the code, check the commented block.
 
 Then build the image.
 

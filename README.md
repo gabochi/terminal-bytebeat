@@ -52,7 +52,7 @@ docker run -it --rm \
 - `i` insert new term (default 0000)
 - `x` delete term
 - `u` undo
-- `s` quick save expression
+- `w` quick save expression
 - `q` quit
 - `up/down` increase/decrease digit
 - `left/right` move cursor

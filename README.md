@@ -49,12 +49,20 @@ docker run -it --rm \
 
 ## Controls
 
-- `i` insert new term (default 0000)
+- `hjkl` move cursor, increase/decrease digit
+- `i` insert new term to the right
 - `x` delete term
 - `u` undo
 - `w` quick save expression
+- `W` next start of term
+- `B` previous start of term
+- `E` next end of term
+- `!` pause/resume eval
+- `$` end of expression
 - `q` quit
-- `up/down` increase/decrease digit
-- `left/right` move cursor
-- `0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f` value
-- `<(<<),>(>>),&,|,^,+,-,*,/,%` operators
+- `0-f` replace with value
+- `<(<<),>(>>),&,|,^,+,-,*,/,%` replace with operator
+
+## Guide/Tutorial
+
+See **minimal.md** for hints and tips.

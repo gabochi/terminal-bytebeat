@@ -1,4 +1,6 @@
-# 
+#  terminal-bytebeat
+
+![](https://github.com/gabochi/terminal-bytebeat/blob/main/screenshot.png)
 
 This is a small terminal bytebeat editor that I made with IA following my own preferences:
 

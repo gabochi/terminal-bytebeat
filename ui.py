@@ -16,7 +16,7 @@ def draw_interface(stdscr, engine, t_idx, c_idx):
             
             stdscr.addstr(1, curr_x, char, attr)
             curr_x += 1
-        curr_x += 2 # Espacio entre tokens
+        curr_x += 1 # Espacio entre tokens
     
     # Cascada de valores
     for i, (ct, cv) in enumerate(engine.cascade):

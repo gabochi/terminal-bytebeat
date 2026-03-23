@@ -68,7 +68,7 @@ def handle_key(key, engine, t_idx, c_idx):
         engine.save_state()
         engine.tokens.insert(t_idx + 1, "0000")
         t_idx += 1
-        c_idx = 0
+        c_idx = 3
     elif key == 'x':
         if len(engine.tokens) > 1:
             engine.save_state()

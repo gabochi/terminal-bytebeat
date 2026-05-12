@@ -66,9 +66,14 @@ def handle_key(key, engine, t_idx, c_idx):
             f.write(" ".join(engine.tokens) + "\n")
     elif key == 'i':
         engine.save_state()
-        engine.tokens.insert(t_idx + 1, "0000")
+        engine.tokens.insert(t_idx + 1, "000")
         t_idx += 1
-        c_idx = 3
+        c_idx = 2
+    elif key == 'A':
+        engine.save_state()
+        engine.tokens.insert(len(engine.tokens) + 1, "000")
+        t_idx = len(engine.tokens) - 1
+        c_idx = 2
     elif key == 'x':
         if len(engine.tokens) > 1:
             engine.save_state()
@@ -81,7 +86,7 @@ def handle_key(key, engine, t_idx, c_idx):
         engine.save_state()
         engine.tokens[t_idx] = OP_MAP[key]
         c_idx = 0
-    elif all(c in string.hexdigits for c in key):
+    elif all(c in string.hexdigits.lower() for c in key):
         engine.save_state()
         if engine.tokens[t_idx] in OPERATORS:
             engine.tokens[t_idx] = key.upper().zfill(4)

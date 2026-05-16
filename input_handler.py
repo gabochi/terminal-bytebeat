@@ -89,7 +89,7 @@ def handle_key(key, engine, t_idx, c_idx):
     elif all(c in string.hexdigits.lower() for c in key):
         engine.save_state()
         if engine.tokens[t_idx] in OPERATORS:
-            engine.tokens[t_idx] = key.upper().zfill(4)
+            engine.tokens[t_idx] = key.upper().zfill(3)
             c_idx = 0
         else:
             l_t = list(engine.tokens[t_idx])

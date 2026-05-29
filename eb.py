@@ -9,7 +9,7 @@ SAMPLE_RATE = 8000
 BUFFER_SIZE = 1024
 
 OPERATORS = ['&', '|', '^', '+', '-', '/', '*', '%', '<<', '>>']
-HEX_CHARS = '0123456789ABCDEF'
+HEX_CHARS = '0123456789abcdef'
 
 buf = "t"
 cursor = 1
@@ -224,8 +224,8 @@ def main(stdscr):
                         new_op = OPERATORS[(idx + dir_val) % len(OPERATORS)]
                         buf = buf[:op_start] + new_op + buf[op_start+op_len:]
                         cursor = op_start
-                    elif buf[cursor].upper() in HEX_CHARS:
-                        idx = HEX_CHARS.index(buf[cursor].upper())
+                    elif buf[cursor].lower() in HEX_CHARS:
+                        idx = HEX_CHARS.index(buf[cursor].lower())
                         buf = buf[:cursor] + HEX_CHARS[(idx + dir_val) % 16] + buf[cursor+1:]
             elif ch in ['<', '>']:
                 save_to_undo()
@@ -233,9 +233,9 @@ def main(stdscr):
                 buf = buf[:cursor] + ins + buf[cursor:]
                 cursor += 2
             elif len(ch) == 1:
-                u_ch = ch.upper()
+                u_ch = ch.lower()
                 # Excluir 'w' y 'u' de la inserción directa para preservar sus atajos de control
-                if u_ch not in ['W', 'U'] and (u_ch in HEX_CHARS or ch in ['t', ' ', ','] or ch in OPERATORS):
+                if u_ch not in ['w', 'u'] and (u_ch in HEX_CHARS or ch in ['t', ' ', ','] or ch in OPERATORS):
                     save_to_undo()
                     buf = buf[:cursor] + ch + buf[cursor:]
                     cursor += 1

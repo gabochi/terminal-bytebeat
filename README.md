@@ -1,18 +1,17 @@
 # 
 
-This is a small terminal bytebeat editor that I made with IA following my own preferences:
+Mostly vibecoded minimal bytebeat editors for terminal and browser.
 
-- Terminal based
+## Guidelines:
+
 - Minimalistic 
 - Posfix/RPN
 - Hex values
-- Limited set of operators
 - Real Time eval
-- Increase/Decrease digits
-- Rotate operators
-- Quick shortcuts
 
 ## Install
+
+Clone this repo, then run this on the new directory:
 
 ```sh
 python3 -m venv venv            ;
@@ -23,7 +22,7 @@ pip install -r requirements.txt
 Once you set the proper enviroment like that, you should be able to run the program.
 
 ```sh
-python3 main.py
+bash run
 ```
 
 ## Dockerfile
@@ -57,8 +56,9 @@ docker run -it --rm \
 - `W` next start of term
 - `B` previous start of term
 - `E` next end of term
+- `A` insert at the end
 - `!` pause/resume eval
-- `$` end of expression
+- `$` go to the end 
 - `q` quit
 - `0-f` replace with value
 - `<(<<),>(>>),&,|,^,+,-,*,/,%` replace with operator

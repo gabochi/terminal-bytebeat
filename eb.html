@@ -5,7 +5,7 @@
     body { background: #000; color: #fff; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
     
     /* Área visual balanceada */
-    #visual-area { height: 46vh; height: 46dvh; display: flex; flex-direction: column; background: #050505; }
+    #visual-area { height: 44vh; height: 44dvh; display: flex; flex-direction: column; background: #050505; }
     #display { padding: 10px; background: #0a0a0a; font-size: 26px; min-height: 44px; word-break: break-all; border-bottom: 1px solid #111; }
     .op { font-weight: bold; color: #ffb300; } .num { color: #fff; }
     
@@ -15,7 +15,7 @@
     #scope-box { flex: 1; background: #000; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #222; } canvas { width: 100%; height: 100%; display: block; }
     
     /* Teclado ajustado para caber perfectamente en pantallas móviles sin desbordar */
-    #keyboard { height: 54vh; height: 54dvh; display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; padding: 4px; background: #111; }
+    #keyboard { height: 56vh; height: 56dvh; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px; background: #111; }
     button { background: #222; color: #fff; border: none; font-size: 16px; border-radius: 5px; font-weight: bold; width: 100%; height: 100%; }
     button:active { background: #444; } .p-btn { background: #1d5c2d; } .p-btn.on { background: #5c1d1d; }
     .nav { background: #1a3a5f; } .cmd { background: #3a3a3a; } .op-btn { color: #ffb300; background: #231d11; }
@@ -26,13 +26,15 @@
         <div id="scope-box"><canvas id="cv"></canvas></div>
     </div>
     <div id="keyboard">
-        <button class="p-btn" id="play">PLAY</button><button class="nav" onclick="cmd('h')">H◀</button><button class="nav" onclick="cmd('l')">L▶</button><button class="nav" onclick="cmd('k')">K▲</button><button class="nav" onclick="cmd('j')">J▼</button>
-        <button class="cmd" onclick="cmd('u')">U</button><button class="cmd" onclick="cmd('x')">X</button><button class="cmd" onclick="cmd(',')">,</button><button class="op-btn" onclick="cmd('t')">T</button><button class="op-btn" onclick="cmd('+')">+</button>
-        <button class="op-btn" onclick="cmd('-')">-</button><button class="op-btn" onclick="cmd('*')">*</button><button class="op-btn" onclick="cmd('/')">/</button><button class="op-btn" onclick="cmd('%')">%</button><button class="op-btn" onclick="cmd('&')">&</button>
-        <button class="op-btn" onclick="cmd('|')">|</button><button class="op-btn" onclick="cmd('^')">^</button><button class="op-btn" onclick="cmd('<<')">&lt;&lt;</button><button class="op-btn" onclick="cmd('>>')">&gt;&gt;</button><button onclick="cmd('0')">0</button>
-        <button onclick="cmd('1')">1</button><button onclick="cmd('2')">2</button><button onclick="cmd('3')">3</button><button onclick="cmd('4')">4</button><button onclick="cmd('5')">5</button>
-        <button onclick="cmd('6')">6</button><button onclick="cmd('7')">7</button><button onclick="cmd('8')">8</button><button onclick="cmd('9')">9</button><button onclick="cmd('A')">A</button>
-        <button onclick="cmd('B')">B</button><button onclick="cmd('C')">C</button><button onclick="cmd('D')">D</button><button onclick="cmd('E')">E</button><button onclick="cmd('F')">F</button>
+        <button class="p-btn" id="play">PLAY</button><button class="cmd" onclick="cmd('x')">X</button><button class="cmd" onclick="cmd('u')">U</button><button class="op-btn" onclick="cmd('t')">T</button>
+        <button class="nav" onclick="cmd('g')">|<</button><button class="nav" onclick="cmd('$')">$</button><button class="op-btn" onclick="cmd('<<')">&lt;&lt;</button><button class="op-btn" onclick="cmd('>>')">&gt;&gt;</button>
+        <button class="op-btn" onclick="cmd('&')">&amp;</button><button class="op-btn" onclick="cmd('|')">|</button><button class="op-btn" onclick="cmd('^')">^</button><button class="op-btn" onclick="cmd('%')">%</button>
+        <button class="op-btn" onclick="cmd('+')">+</button><button class="op-btn" onclick="cmd('-')">-</button><button class="op-btn" onclick="cmd('*')">*</button><button class="op-btn" onclick="cmd('/')">/</button>
+        <button class="nav" onclick="cmd('h')">◀</button><button class="nav" onclick="cmd('j')">▼</button><button class="nav" onclick="cmd('k')">▲</button><button class="nav" onclick="cmd('l')">▶</button>
+        <button onclick="cmd('1')">1</button><button onclick="cmd('2')">2</button><button onclick="cmd('3')">3</button><button onclick="cmd('a')">a</button>
+        <button onclick="cmd('4')">4</button><button onclick="cmd('5')">5</button><button onclick="cmd('6')">6</button><button onclick="cmd('b')">b</button>
+        <button onclick="cmd('7')">7</button><button onclick="cmd('8')">8</button><button onclick="cmd('9')">9</button><button onclick="cmd('c')">c</button>
+        <button onclick="cmd('0')">0</button><button onclick="cmd('d')">d</button><button onclick="cmd('e')">e</button><button onclick="cmd('f')">f</button>
     </div>
 <script>
     const OPS = ['&','|','^','+','-','/','*','%','<<','>>'], HEX = '0123456789ABCDEF';
@@ -86,10 +88,13 @@
     function cmd(a) {
         if (a === 'h') cursor = Math.max(0, cursor - 1);
         else if (a === 'l') cursor = Math.min(buf.length, cursor + 1);
+        else if (a === 'g') cursor = 0;
+        else if (a === '$') cursor = buf.length;
         else if (a === 'x' && buf.length > 0) {
             undo.push(buf); let o = getOp(buf, cursor);
-            if (o) { buf = buf.substring(0, o.s) + buf.substring(o.s + o.l); cursor = Math.max(0, o.s - 1); }
-            else { buf = buf.substring(0, cursor) + buf.substring(cursor + 1); if (cursor >= buf.length) cursor = Math.max(0, buf.length - 1); }
+            if (o) { buf = buf.substring(0, o.s) + buf.substring(o.s + o.l); }
+            else { buf = buf.substring(0, cursor) + buf.substring(cursor + 1); }
+            cursor = Math.min(cursor, buf.length);
         } else if (a === 'u' && undo.length > 0) { buf = undo.pop(); cursor = Math.min(cursor, buf.length); }
         else if (['j', 'k'].includes(a) && buf.length > 0) {
             undo.push(buf); let d = a === 'k' ? 1 : -1, o = getOp(buf, cursor);
@@ -97,7 +102,7 @@
             else if (HEX.includes(buf[cursor]?.toUpperCase())) {
                 let idx = HEX.indexOf(buf[cursor].toUpperCase()); buf = buf.substring(0, cursor) + HEX[(idx + d + 16) % 16] + buf.substring(cursor + 1);
             }
-        } else if (!['h','l','x','u','j','k'].includes(a)) { undo.push(buf); buf = buf.substring(0, cursor) + a + buf.substring(cursor); cursor += a.length; }
+        } else if (!['h','l','x','u','j','k','g','$'].includes(a)) { undo.push(buf); buf = buf.substring(0, cursor) + a + buf.substring(cursor); cursor += a.length; }
         
         let html = "", cnt = 0;
         buf.split(/(<<|>>|[\s&|^\+\-\/\*%t,])/).forEach(tk => {

@@ -207,12 +207,12 @@ def main(stdscr):
                 op, op_start, op_len = get_operator_at(buf, cursor)
                 if op:
                     buf = buf[:op_start] + buf[op_start+op_len:]
-                    cursor = max(0, op_start - 1)
+                    cursor = min(op_start, len(buf))
                 else:
                     if cursor < len(buf):
                         buf = buf[:cursor] + buf[cursor+1:]
                     if cursor >= len(buf) and cursor > 0:
-                        cursor = len(buf) - 1
+                        cursor = len(buf)
             elif ch in ['j', 'k'] and buf:
                 # Evitar mutaciones si el cursor está al final en el espacio vacío
                 if cursor < len(buf):

@@ -201,6 +201,7 @@ def show_help(stdscr):
 def main(stdscr):
     global buf, cursor, undo_stack, log_t, log_o, hist, save_message, save_message_time, global_t
     curses.curs_set(0)
+    curses.use_default_colors()
     stdscr.nodelay(True)
     stdscr.clear()
     

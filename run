@@ -1,4 +1,5 @@
 #!/bin/bash
 . venv/bin/activate
-python3 eb.py #main.py
+[ -z "$1" ] && python3 eb.py
+[ "$1" == "44" ] && python3 eb-44k.py
 deactivate

@@ -101,8 +101,105 @@ def get_operator_at(s, idx):
     if idx < len(s) and s[idx] in OPERATORS: return s[idx], idx, 1
     return None, idx, 0
 
+def fuzzfind(stdscr):
+    try:
+        with open("bytebeat_presets.txt", "r") as f:
+            presets = [line.rstrip('\n') for line in f if line.strip()]
+    except FileNotFoundError:
+        return None
+    if not presets:
+        return None
+    stdscr.nodelay(False)
+    query = ""
+    selected = 0
+    scroll = 0
+    filtered = list(presets)
+    while True:
+        stdscr.erase()
+        max_y, max_x = stdscr.getmaxyx()
+        stdscr.addstr(0, 0, f": {query}")
+        max_items = max_y - 2
+        if selected < scroll:
+            scroll = selected
+        if scroll + max_items > len(filtered):
+            scroll = max(0, len(filtered) - max_items)
+        if selected >= scroll + max_items:
+            scroll = selected - max_items + 1
+        if scroll < 0:
+            scroll = 0
+        vis = filtered[scroll:scroll + max_items]
+        for i, item in enumerate(vis):
+            style = curses.A_REVERSE if i == selected - scroll else curses.A_NORMAL
+            display = item[:max_x - 1] if len(item) >= max_x else item
+            try:
+                stdscr.addstr(1 + i, 0, display, style)
+            except:
+                pass
+        stdscr.refresh()
+        ch = stdscr.getch()
+        if ch == 27:
+            stdscr.nodelay(True)
+            return None
+        elif ch in (10, 13):
+            stdscr.nodelay(True)
+            return filtered[selected] if filtered else None
+        elif ch in (curses.KEY_BACKSPACE, 127, 8, 263):
+            query = query[:-1]
+        elif ch == curses.KEY_UP:
+            selected = max(0, selected - 1)
+        elif ch == curses.KEY_DOWN:
+            selected = min(len(filtered) - 1, selected + 1)
+        elif 32 <= ch <= 126:
+            query += chr(ch)
+        filtered = [p for p in presets if query.lower() in p.lower()]
+        if filtered:
+            selected = min(selected, len(filtered) - 1)
+        else:
+            selected = 0
+
+def show_help(stdscr):
+    try:
+        with open("help.txt", "r") as f:
+            lines = [line.rstrip('\n') for line in f]
+    except FileNotFoundError:
+        return
+    if not lines:
+        return
+    stdscr.nodelay(False)
+    scroll = 0
+    while True:
+        stdscr.erase()
+        max_y, max_x = stdscr.getmaxyx()
+        max_items = max_y - 1
+        if scroll + max_items > len(lines):
+            scroll = max(0, len(lines) - max_items)
+        if scroll < 0:
+            scroll = 0
+        for i, line in enumerate(lines[scroll:scroll + max_items]):
+            display = line[:max_x - 1] if len(line) >= max_x else line
+            try:
+                stdscr.addstr(i, 0, display)
+            except:
+                pass
+        if len(lines) > max_items:
+            try:
+                stdscr.addstr(max_y - 1, 0, "-- more ↑/↓ --" if scroll + max_items < len(lines) else "-- end --")
+            except:
+                pass
+        stdscr.refresh()
+        ch = stdscr.getch()
+        if ch in (27, ord('q'), ord('Q')):
+            break
+        elif ch in (10, 13, 32):
+            break
+        elif ch == curses.KEY_UP:
+            scroll = max(0, scroll - 1)
+        elif ch == curses.KEY_DOWN:
+            scroll = min(len(lines) - 1, scroll + 1)
+    stdscr.nodelay(True)
+
 def main(stdscr):
-    global buf, cursor, undo_stack, log_t, log_o, hist, save_message, save_message_time
+    global buf, cursor, undo_stack, log_t, log_o, hist, save_message, save_message_time, global_t
     curses.curs_set(0)
     stdscr.nodelay(True)
     stdscr.clear()
@@ -143,7 +240,7 @@ def main(stdscr):
             local_log_t = list(log_t)
             local_log_o = list(log_o)
             
-        stdscr.addstr(3, 2, "────────────────────────────────────────────────────────", curses.A_DIM)
+        stdscr.addstr(3, 2, "--------------------------------------------------------", curses.A_DIM)
         for i in range(min(10, len(local_log_t))):
             style = curses.A_BOLD if i == 0 else curses.A_DIM
             if i < len(local_log_t):
@@ -166,8 +263,8 @@ def main(stdscr):
             refs = [(255, "0xFF"), (128, "0x80"), (0, "0x00")]
             for val, txt in refs:
                 y_offset = int((1.0 - (val / 255.0)) * (scope_height - 1))
-                stdscr.addstr(start_y := (start_scope_y + y_offset), 2, f"{txt} ┼", curses.A_DIM)
-                stdscr.addstr(start_y, 9, "─" * scope_width, curses.A_DIM)
+                stdscr.addstr(start_y := (start_scope_y + y_offset), 2, f"{txt} +", curses.A_DIM)
+                stdscr.addstr(start_y, 9, "-" * scope_width, curses.A_DIM)
             
             for xs in range(scope_width):
                 val = hist[(xs * 4) % 256]
@@ -184,12 +281,28 @@ def main(stdscr):
             
         if ch == 'q':
             break
-            
+        if ch == 'r':
+            global_t = 0
+        if ch == '?':
+            show_help(stdscr)
+        if ch == ':':
+            result = fuzzfind(stdscr)
+            if result is not None:
+                with buffer_lock:
+                    save_to_undo()
+                    buf = result
+                    cursor = len(buf)
+
         with buffer_lock:
             if ch == 'h':
                 cursor = max(0, cursor - 1)
             elif ch == 'l':
                 cursor = min(len(buf), cursor + 1)
+            elif ch == '$':
+                if cursor >= len(buf):
+                    cursor = 0
+                else:
+                    cursor = len(buf)
             elif ch == 'u' and undo_stack:
                 buf = undo_stack.pop()
                 cursor = min(cursor, len(buf))

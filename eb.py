@@ -4,6 +4,7 @@ import sounddevice as sd
 import threading
 import time
 import re
+import math
 
 SAMPLE_RATE = 8000
 BUFFER_SIZE = 1024
@@ -27,6 +28,8 @@ telemetry_lock = threading.Lock()
 # Estado de mensaje de guardado
 save_message = ""
 save_message_time = 0
+
+signed_mode = False
 
 def save_to_undo():
     global buf, undo_stack
@@ -52,9 +55,16 @@ def eval_rpn(str_expr, t):
                 elif token == '^': res = a ^ b
                 elif token == '+': res = (a + b) & 0xFFFFFFFF
                 elif token == '-': res = (a - b) & 0xFFFFFFFF
-                elif token == '*': res = (a * b) & 0xFFFFFFFF
+                elif token == '*':
+                    res = (a * b) & 0xFFFFFFFF
+                    if signed_mode and res >= 0x80000000:
+                        res -= 0x100000000
                 elif token == '/': res = (a // b) & 0xFFFFFFFF if b != 0 else 0
-                elif token == '%': res = (a % b) & 0xFFFFFFFF if b != 0 else 0
+                elif token == '%':
+                    if signed_mode:
+                        res = int(math.fmod(a, b)) & 0xFFFFFFFF if b != 0 else 0
+                    else:
+                        res = (a % b) & 0xFFFFFFFF if b != 0 else 0
                 elif token == '<<': res = (a << (b % 32)) & 0xFFFFFFFF
                 elif token == '>>': res = (a >> (b % 32)) & 0xFFFFFFFF
                 stack.append(res)
@@ -199,7 +209,7 @@ def show_help(stdscr):
     stdscr.nodelay(True)
 
 def main(stdscr):
-    global buf, cursor, undo_stack, log_t, log_o, hist, save_message, save_message_time, global_t
+    global buf, cursor, undo_stack, log_t, log_o, hist, save_message, save_message_time, global_t, signed_mode
     curses.curs_set(0)
     curses.use_default_colors()
     stdscr.nodelay(True)
@@ -212,6 +222,9 @@ def main(stdscr):
         stdscr.erase()
         max_y, max_x = stdscr.getmaxyx()
         
+        if signed_mode:
+            stdscr.addstr(0, 0, "SIGNED", curses.A_BOLD)
+
         # 1. Expresión RPN
         y_pos, x_offset = 1, 2
         with buffer_lock:
@@ -284,6 +297,8 @@ def main(stdscr):
             break
         if ch == 'r':
             global_t = 0
+        if ch == 's':
+            signed_mode = not signed_mode
         if ch == '?':
             show_help(stdscr)
         if ch == ':':
@@ -316,6 +331,15 @@ def main(stdscr):
                 except Exception as e:
                     save_message = f"[ Error al guardar: {str(e)} ]"
                 save_message_time = time.time()
+            elif ch in ('KEY_BACKSPACE', '\b', '\x7f'):
+                if cursor > 0:
+                    save_to_undo()
+                    if cursor >= 2 and buf[cursor-2:cursor] in ('<<', '>>'):
+                        buf = buf[:cursor-2] + buf[cursor:]
+                        cursor -= 2
+                    else:
+                        buf = buf[:cursor-1] + buf[cursor:]
+                        cursor -= 1
             elif ch == 'x' and buf:
                 save_to_undo()
                 op, op_start, op_len = get_operator_at(buf, cursor)

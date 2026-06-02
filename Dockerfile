@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir \
     sounddevice \
     plotille
 
-COPY main.py .
+COPY eb.py .
 
-ENTRYPOINT ["python", "main.py"]
+ENTRYPOINT ["python", "eb.py"]
 

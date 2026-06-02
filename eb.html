@@ -1,0 +1,136 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>BB</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; font-family: monospace; }
+    /* Uso de dvh para evitar que las barras móviles oculten contenido */
+    body { background: #000; color: #fff; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+    
+    /* Área visual balanceada */
+    #visual-area { height: 44vh; height: 44dvh; display: flex; flex-direction: column; background: #050505; }
+    #display { padding: 10px; background: #0a0a0a; font-size: 26px; min-height: 44px; word-break: break-all; border-bottom: 1px solid #111; }
+    .op { font-weight: bold; color: #ffb300; } .num { color: #fff; }
+    
+    #cascades { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; height: 65px; padding: 4px 10px; font-size: 12px; color: #444; background: #070707; }
+    .col { display: flex; flex-direction: column; overflow: hidden; } .act { color: #aaa; font-weight: bold; }
+    
+    #scope-box { flex: 1; background: #000; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #222; } canvas { width: 100%; height: 100%; display: block; }
+    
+    /* Teclado ajustado para caber perfectamente en pantallas móviles sin desbordar */
+    #keyboard { height: 56vh; height: 56dvh; display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px; background: #111; }
+    button { background: #222; color: #fff; border: none; font-size: 16px; border-radius: 5px; font-weight: bold; width: 100%; height: 100%; }
+    button:active { background: #444; } .p-btn { background: #1d5c2d; } .p-btn.on { background: #5c1d1d; }
+    .nav { background: #1a3a5f; } .cmd { background: #3a3a3a; } .op-btn { color: #ffb300; background: #231d11; }
+</style></head><body>
+    <div id="visual-area">
+        <div id="display"></div>
+        <div id="cascades"><div class="col" id="lt"></div><div class="col" id="lo"></div></div>
+        <div id="scope-box"><canvas id="cv"></canvas></div>
+    </div>
+    <div id="keyboard">
+        <button class="p-btn" id="play">PLAY</button><button class="cmd" onclick="cmd('x')">X</button><button class="cmd" onclick="cmd('u')">U</button><button class="op-btn" onclick="cmd('t')">T</button>
+        <button class="nav" onclick="cmd('g')">|<</button><button class="nav" onclick="cmd('$')">$</button><button class="op-btn" onclick="cmd('<<')">&lt;&lt;</button><button class="op-btn" onclick="cmd('>>')">&gt;&gt;</button>
+        <button class="op-btn" onclick="cmd('&')">&amp;</button><button class="op-btn" onclick="cmd('|')">|</button><button class="op-btn" onclick="cmd('^')">^</button><button class="op-btn" onclick="cmd('%')">%</button>
+        <button class="op-btn" onclick="cmd('+')">+</button><button class="op-btn" onclick="cmd('-')">-</button><button class="op-btn" onclick="cmd('*')">*</button><button class="op-btn" onclick="cmd('/')">/</button>
+        <button class="nav" onclick="cmd('h')">◀</button><button class="nav" onclick="cmd('j')">▼</button><button class="nav" onclick="cmd('k')">▲</button><button class="nav" onclick="cmd('l')">▶</button>
+        <button onclick="cmd('1')">1</button><button onclick="cmd('2')">2</button><button onclick="cmd('3')">3</button><button onclick="cmd('a')">a</button>
+        <button onclick="cmd('4')">4</button><button onclick="cmd('5')">5</button><button onclick="cmd('6')">6</button><button onclick="cmd('b')">b</button>
+        <button onclick="cmd('7')">7</button><button onclick="cmd('8')">8</button><button onclick="cmd('9')">9</button><button onclick="cmd('c')">c</button>
+        <button onclick="cmd('0')">0</button><button onclick="cmd('d')">d</button><button onclick="cmd('e')">e</button><button onclick="cmd('f')">f</button>
+    </div>
+<script>
+    const OPS = ['&','|','^','+','-','/','*','%','<<','>>'], HEX = '0123456789ABCDEF';
+    let buf = "t", cursor = 1, undo = [], audio = null, node = null, globalT = 0, lastOut = 0, hist = new Uint8Array(256), lT = [], lO = [];
+    const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+    function res() { cv.width = cv.parentElement.clientWidth; cv.height = cv.parentElement.clientHeight; }
+    window.onresize = res; res();
+
+    function evalRPN(str, t) {
+        let toks = str.replace(/,/g,' ').split(/(<<|>>|[\s&|^\+\-\/\*%t,])/).filter(k => k && k.trim()), stk = [];
+        for (let tk of toks) {
+            if (tk === 't') stk.push(t | 0);
+            else if (OPS.includes(tk)) {
+                if (stk.length < 2) return 0;
+                let b = stk.pop(), a = stk.pop(), r = 0;
+                if (tk==='&') r=a&b; else if (tk==='|') r=a|b; else if (tk==='^') r=a^b; else if (tk==='+') r=(a+b)|0; else if (tk==='-') r=(a-b)|0;
+                else if (tk==='*') r=Math.imul(a,b); else if (tk==='/') r=b!==0?(a/b)|0:0; else if (tk==='%') r=b!==0?(a%b)|0:0;
+                else if (tk==='<<') r=a<<(b%32); else if (tk==='>>') r=a>>(b%32); stk.push(r | 0);
+            } else { let v = parseInt(tk,16); stk.push(!isNaN(v)?v|0:0); }
+        }
+        return stk.length > 0 ? (stk[stk.length - 1] & 0xFF) : 0;
+    }
+
+    function draw() {
+        requestAnimationFrame(draw); ctx.clearRect(0,0,cv.width,cv.height);
+        let h = cv.height, w = cv.width; ctx.strokeStyle = '#151515'; ctx.fillStyle = '#444'; ctx.font = '10px monospace';
+        [255, 128, 0].forEach(v => {
+            let y = (1.0 - (v / 255.0)) * (h - 20) + 10; ctx.beginPath(); ctx.moveTo(45, y); ctx.lineTo(w, y); ctx.stroke();
+            ctx.fillText('0x' + v.toString(16).toUpperCase().padStart(2,'0'), 10, y + 4);
+        });
+        
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.beginPath();
+        let stepX = (w - 55) / 64;
+        for (let xs = 0; xs <= 64; xs++) {
+            let val = hist[(xs * 4) % 256], x = 50 + (xs * stepX), y = (1.0 - (val / 255.0)) * (h - 20) + 10;
+            if (xs === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        
+        document.getElementById('lt').innerHTML = lT.map((v,i) => `<div class="${i===0?'act':''}">t:0x${v}</div>`).join('');
+        document.getElementById('lo').innerHTML = lO.map((v,i) => `<div class="${i===0?'act':''}">OUT:0x${v}</div>`).join('');
+    }
+    draw();
+
+    function getOp(s, idx) {
+        if (idx < s.length - 1 && ['<<', '>>'].includes(s.substring(idx, idx + 2))) return { op: s.substring(idx, idx + 2), s: idx, l: 2 };
+        if (idx > 0 && ['<<', '>>'].includes(s.substring(idx - 1, idx + 1))) return { op: s.substring(idx - 1, idx + 1), s: idx - 1, l: 2 };
+        if (idx < s.length && OPS.includes(s[idx])) return { op: s[idx], s: idx, l: 1 }; return null;
+    }
+
+    function cmd(a) {
+        if (a === 'h') cursor = Math.max(0, cursor - 1);
+        else if (a === 'l') cursor = Math.min(buf.length, cursor + 1);
+        else if (a === 'g') cursor = 0;
+        else if (a === '$') cursor = buf.length;
+        else if (a === 'x' && buf.length > 0) {
+            undo.push(buf); let o = getOp(buf, cursor);
+            if (o) { buf = buf.substring(0, o.s) + buf.substring(o.s + o.l); }
+            else { buf = buf.substring(0, cursor) + buf.substring(cursor + 1); }
+            cursor = Math.min(cursor, buf.length);
+        } else if (a === 'u' && undo.length > 0) { buf = undo.pop(); cursor = Math.min(cursor, buf.length); }
+        else if (['j', 'k'].includes(a) && buf.length > 0) {
+            undo.push(buf); let d = a === 'k' ? 1 : -1, o = getOp(buf, cursor);
+            if (o) buf = buf.substring(0, o.s) + OPS[(OPS.indexOf(o.op) + d + OPS.length) % OPS.length] + buf.substring(o.s + o.l);
+            else if (HEX.includes(buf[cursor]?.toUpperCase())) {
+                let idx = HEX.indexOf(buf[cursor].toUpperCase()); buf = buf.substring(0, cursor) + HEX[(idx + d + 16) % 16] + buf.substring(cursor + 1);
+            }
+        } else if (!['h','l','x','u','j','k','g','$'].includes(a)) { undo.push(buf); buf = buf.substring(0, cursor) + a + buf.substring(cursor); cursor += a.length; }
+        
+        let html = "", cnt = 0;
+        buf.split(/(<<|>>|[\s&|^\+\-\/\*%t,])/).forEach(tk => {
+            if (!tk) return;
+            for (let i = 0; i < tk.length; i++) {
+                html += `<span class="${(OPS.includes(tk)||tk==='t')?'op':'num'}" style="${cnt===cursor?'background:#444':''}">${tk[i]}</span>`; cnt++;
+            }
+        });
+        if (cursor >= buf.length) html += `<span style="background:#444">&nbsp;</span>`;
+        document.getElementById('display').innerHTML = html;
+    }
+
+    document.getElementById('play').onclick = function() {
+        if (!audio) {
+            audio = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+            node = audio.createScriptProcessor(1024, 0, 1);
+            node.onaudioprocess = function(e) {
+                let out = e.outputBuffer.getChannelData(0);
+                for (let i = 0; i < out.length; i++) {
+                    let s = evalRPN(buf, globalT); out[i] = (s / 127.5) - 1.0; hist[globalT % 256] = s; lastOut = s; globalT++;
+                }
+                lT.unshift((globalT>>>0).toString(16).toUpperCase().padStart(8,'0')); if(lT.length>6) lT.pop();
+                lO.unshift(lastOut.toString(16).toUpperCase().padStart(2,'0')); if(lO.length>6) lO.pop();
+            };
+            node.connect(audio.destination); audio.resume(); this.textContent = "STOP"; this.classList.add('on');
+        } else if (audio.state === 'running') { audio.suspend(); this.textContent = "PLAY"; this.classList.remove('on'); }
+        else { audio.resume(); this.textContent = "STOP"; this.classList.add('on'); }
+    };
+    cmd('');
+</script></body></html>
+

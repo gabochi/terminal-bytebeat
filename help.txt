@@ -1,0 +1,40 @@
+— bytebeat terminal editor (RPN with hex values)
+
+  Evaluate Reverse Polish Notation expressions
+  (postfix) with hexadecimal values in real time.
+
+KEYBINDINGS
+  h/l         Move cursor left/right
+  j/k         Scroll hex digit or operator up/down at cursor
+  < / >       Insert shift-left / shift-right at cursor
+  x           Delete character or operator at cursor
+  Backspace   Delete character to the left of cursor
+  u           Undo last edit
+  w           Save expression to presets file
+  $           Toggle cursor to start / end of expression
+  r           Reset time variable t to 0
+  s           Toggle signed/unsigned arithmetic mode
+  :           Open preset browser (type to filter ↓↑ Enter)
+  ?           This help screen
+  q           Quit
+
+ARITHMETIC MODE
+  Unsigned (default): all values stay 0..2³²-1, % gives 0..divisor-1
+  Signed:             arithmetic wraps at 2³¹ (like JavaScript),
+                      % preserves sign of dividend —
+                      creates percussive accents on overflow
+
+EXPRESSION FORMAT
+  Push hex values (0-f) onto the stack.
+  Operators pop two values and push the result.
+  t = time variable (auto-incremented each sample).
+
+  Operators: & | ^ + - * / % << >>
+
+  Final stack value & 0xFF is output as a sample (0-255).
+
+  Examples:
+    t 1 &          → t & 1
+    t 2 * 1 &      → low bit of (t * 2)
+    t t * 8 &      → t² & 8
+    t 1 + t 3 + *  → (t+1) × (t+3)

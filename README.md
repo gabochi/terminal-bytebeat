@@ -1,6 +1,6 @@
-# minimal terminal and html bytebeat editors
+# minimal terminal, html, and GUI bytebeat editors
 
-Two standalone bytebeat editors: one for the terminal (curses) and one for the browser (single HTML file). Both evaluate RPN expressions with hexadecimal values in real time.
+Three bytebeat editors: terminal (curses), browser (single HTML file), and GUI (Pygame). All evaluate RPN expressions with hexadecimal values in real time.
 
 ---
 
@@ -11,9 +11,12 @@ Two standalone bytebeat editors: one for the terminal (curses) and one for the b
 | `eb.py` | Terminal editor (main entry point, run with `bash run`) |
 | `eb-44k.py` | Terminal editor variant at 44100 Hz sample rate (t advances at 8000 Hz rate) |
 | `eb.html` | Self-contained browser version — open directly, no server needed |
+| `eb_gui.py` | Pygame GUI with waveform, phase portrait, bit planes, spectrogram |
+| `run-gui` | Shell script to run the GUI (activates venv + installs deps) |
 | `help.txt` | Help text displayed by pressing `?` inside the editor |
 | `minimal.md` | Bytebeat composition guide (not a developer doc) |
 | `bytebeat_presets.txt` | Saved expressions (written by `w` key) |
+| `AGENTS.md` | Architecture notes for AI coding assistants |
 | `Dockerfile` | Docker image definition |
 | `requirements.txt` | Python dependencies |
 
@@ -127,6 +130,48 @@ t 9C | B3 %     → OR-shape truncated by modulo
 ## Browser version
 
 Open `eb.html` in any browser. No server or build step required. It has a virtual keyboard for mobile use.
+
+---
+
+## Pygame GUI
+
+Requires `pygame`, `numpy`, and `sounddevice` (install with `pip install -r requirements.txt`).
+
+```sh
+bash run-gui                    # all panels at 8000 Hz
+python3 eb_gui.py               # same
+python3 eb_gui.py --rate 44100  # 44.1 kHz output
+python3 eb_gui.py --no-spectrogram   # hide spectrogram
+python3 eb_gui.py --no-waveform --no-bits  # phase + spectrogram only
+```
+
+### CLI flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--rate N` | 8000 | Sample rate in Hz |
+| `--no-waveform` | off | Hide waveform panel |
+| `--no-phase` | off | Hide phase portrait |
+| `--no-bits` | off | Hide bit planes |
+| `--no-spectrogram` | off | Hide spectrogram |
+
+### Layout
+
+2×2 grid of visualization panels with a large expression bar (36 px font, 80 px tall) in the middle:
+
+- **Waveform** (top-left) — polyline with guide lines at 0x00 / 0x80 / 0xFF.
+- **Bit planes** (top-right) — 8 horizontal strips showing bits 0–7 of recent samples.
+- **Phase portrait** (bottom-left) — 80×24 density grid with sqrt scaling and 0.95 decay, upscaled to panel size.
+- **Spectrogram** (bottom-right) — scrolling 256-point FFT (Hann window, per-column normalization, sqrt enhancement) as grayscale.
+
+Expression bar shows the current RPN buffer in a large monospace font with cursor highlighting. The **SIGNED** indicator appears to the left when signed mode is active.
+
+### Keybindings
+
+Same vim-like keys as the terminal version (`h`/`l`/`j`/`k`/`x`/`u`/`w`/`r`/`s`/`q`/`<`/`>` / `:` / `?` / `$`). Arrow keys also move the cursor. `F1` opens help. `Esc` opens the preset browser.
+
+- `:` — fuzzy-find presets from `bytebeat_presets.txt` (type to filter, ↑/↓ to select, Enter to load, Esc to cancel)
+- `?` / `F1` — help overlay
 
 ---
 

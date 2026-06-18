@@ -1,115 +1,14 @@
+#!/usr/bin/env python3
+import argparse
 import curses
-import numpy as np
 import sounddevice as sd
-import threading
 import time
-import re
-import math
 
-SAMPLE_RATE = 8000
-BUFFER_SIZE = 1024
+import editor
+from engine import RPNEngine
+from visuals import draw_expression, draw_cascade, PhasePortrait, BitPlanes, Waveform
+from layout import LayoutManager, LAYOUTS
 
-OPERATORS = ['&', '|', '^', '+', '-', '/', '*', '%', '<<', '>>']
-HEX_CHARS = '0123456789abcdef'
-
-buf = "t"
-cursor = 1
-undo_stack = []
-buffer_lock = threading.Lock()
-
-# Estados globales de audio, osciloscopio y cascadas (logs)
-global_t = 0
-last_out = 0
-hist = np.zeros(256, dtype=np.uint8)
-log_t = []
-log_o = []
-telemetry_lock = threading.Lock()
-
-# Estado de mensaje de guardado
-save_message = ""
-save_message_time = 0
-
-signed_mode = False
-
-def save_to_undo():
-    global buf, undo_stack
-    if len(undo_stack) > 50:
-        undo_stack.pop(0)
-    undo_stack.append(buf)
-
-def eval_rpn(str_expr, t):
-    clean_str = str_expr.replace(',', ' ')
-    tokens = [tok for tok in re.split(r'(<<|>>|[\s\&\|\^\+\-\/\*\%t\,])', clean_str) if tok.strip()]
-    
-    stack = []
-    for token in tokens:
-        if token == 't':
-            stack.append(t & 0xFFFFFFFF)
-        elif token in OPERATORS:
-            if len(stack) < 2: return 0
-            b = stack.pop()
-            a = stack.pop()
-            try:
-                if token == '&': res = a & b
-                elif token == '|': res = a | b
-                elif token == '^': res = a ^ b
-                elif token == '+': res = (a + b) & 0xFFFFFFFF
-                elif token == '-': res = (a - b) & 0xFFFFFFFF
-                elif token == '*':
-                    res = (a * b) & 0xFFFFFFFF
-                    if signed_mode and res >= 0x80000000:
-                        res -= 0x100000000
-                elif token == '/': res = (a // b) & 0xFFFFFFFF if b != 0 else 0
-                elif token == '%':
-                    if signed_mode:
-                        res = int(math.fmod(a, b)) & 0xFFFFFFFF if b != 0 else 0
-                    else:
-                        res = (a % b) & 0xFFFFFFFF if b != 0 else 0
-                elif token == '<<': res = (a << (b % 32)) & 0xFFFFFFFF
-                elif token == '>>': res = (a >> (b % 32)) & 0xFFFFFFFF
-                stack.append(res)
-            except:
-                stack.append(0)
-        else:
-            try:
-                val = int(token, 16) & 0xFFFFFFFF
-                stack.append(val)
-            except ValueError:
-                pass
-                
-    return (stack[-1] & 0xFF) if stack else 0
-
-def audio_callback(outdata, frames, time_info, status):
-    global buf, global_t, last_out, hist, log_t, log_o
-    with buffer_lock:
-        local_buffer = buf
-        
-    out_samples = np.zeros(frames, dtype=np.uint8)
-    current_t = global_t
-    
-    for i in range(frames):
-        out_samples[i] = eval_rpn(local_buffer, current_t)
-        hist[current_t % 256] = out_samples[i]
-        current_t += 1
-        
-    global_t = current_t
-    
-    with telemetry_lock:
-        last_out = out_samples[-1] if frames > 0 else 0
-        
-        log_t.insert(0, f"t:0x{global_t:08X}")
-        if len(log_t) > 10: log_t.pop()
-            
-        log_o.insert(0, f"OUT:0x{last_out:02X}")
-        if len(log_o) > 10: log_o.pop()
-
-    outdata[:, 0] = (out_samples / 127.5) - 1.0
-
-def get_operator_at(s, idx):
-    if idx < len(s) - 1 and s[idx:idx+2] in ['<<', '>>']: return s[idx:idx+2], idx, 2
-    if idx > 0 and s[idx-1:idx+1] in ['<<', '>>']: return s[idx-1:idx+1], idx-1, 2
-    if idx < len(s) and s[idx] in OPERATORS: return s[idx], idx, 1
-    return None, idx, 0
 
 def fuzzfind(stdscr):
     try:
@@ -143,7 +42,7 @@ def fuzzfind(stdscr):
             display = item[:max_x - 1] if len(item) >= max_x else item
             try:
                 stdscr.addstr(1 + i, 0, display, style)
-            except:
+            except Exception:
                 pass
         stdscr.refresh()
         ch = stdscr.getch()
@@ -155,17 +54,22 @@ def fuzzfind(stdscr):
             return filtered[selected] if filtered else None
         elif ch in (curses.KEY_BACKSPACE, 127, 8, 263):
             query = query[:-1]
-        elif ch == curses.KEY_UP:
+        elif ch == curses.KEY_UP or ch == ord('k'):
             selected = max(0, selected - 1)
-        elif ch == curses.KEY_DOWN:
+        elif ch == curses.KEY_DOWN or ch == ord('j'):
             selected = min(len(filtered) - 1, selected + 1)
-        elif 32 <= ch <= 126:
+        elif ch == ord('h'):
+            selected = max(0, selected - max_items)
+        elif ch == ord('l'):
+            selected = min(len(filtered) - 1, selected + max_items)
+        elif 32 <= ch <= 126 and chr(ch).lower() in editor.HEX_CHARS + 't, &|^+-*/%<>':
             query += chr(ch)
         filtered = [p for p in presets if query.lower() in p.lower()]
         if filtered:
             selected = min(selected, len(filtered) - 1)
         else:
             selected = 0
+
 
 def show_help(stdscr):
     try:
@@ -189,12 +93,13 @@ def show_help(stdscr):
             display = line[:max_x - 1] if len(line) >= max_x else line
             try:
                 stdscr.addstr(i, 0, display)
-            except:
+            except Exception:
                 pass
         if len(lines) > max_items:
             try:
-                stdscr.addstr(max_y - 1, 0, "-- more ↑/↓ --" if scroll + max_items < len(lines) else "-- end --")
-            except:
+                stdscr.addstr(max_y - 1, 0,
+                              "-- more \u2191/\u2193 --" if scroll + max_items < len(lines) else "-- end --")
+            except Exception:
                 pass
         stdscr.refresh()
         ch = stdscr.getch()
@@ -202,184 +107,201 @@ def show_help(stdscr):
             break
         elif ch in (10, 13, 32):
             break
-        elif ch == curses.KEY_UP:
+        elif ch == curses.KEY_UP or ch == ord('k'):
             scroll = max(0, scroll - 1)
-        elif ch == curses.KEY_DOWN:
+        elif ch == curses.KEY_DOWN or ch == ord('j'):
             scroll = min(len(lines) - 1, scroll + 1)
+        elif ch == ord('h'):
+            scroll = max(0, scroll - max_items)
+        elif ch == ord('l'):
+            scroll = min(len(lines) - 1, scroll + max_items)
     stdscr.nodelay(True)
 
-def main(stdscr):
-    global buf, cursor, undo_stack, log_t, log_o, hist, save_message, save_message_time, global_t, signed_mode
+
+def main(stdscr, sample_rate=8000, t_step=1, t_den=1):
     curses.curs_set(0)
     curses.use_default_colors()
     stdscr.nodelay(True)
     stdscr.clear()
-    
-    stream = sd.OutputStream(channels=1, callback=audio_callback, samplerate=SAMPLE_RATE, blocksize=BUFFER_SIZE)
-    stream.start()
-    
-    while True:
-        stdscr.erase()
-        max_y, max_x = stdscr.getmaxyx()
-        
-        if signed_mode:
-            stdscr.addstr(0, 0, "SIGNED", curses.A_BOLD)
 
-        # 1. Expresión RPN
-        y_pos, x_offset = 1, 2
-        with buffer_lock:
-            tokens = re.split(r'(<<|>>|[\s\&\|\^\+\-\/\*\%t\,])', buf)
-            current_x = x_offset
-            char_count = 0
-            
-            for token in tokens:
-                if not token: continue
-                for char in token:
-                    is_cursor = (char_count == cursor)
-                    style = curses.A_BOLD if (token in OPERATORS or token == 't') else curses.A_NORMAL
-                    
-                    if is_cursor:
-                        stdscr.addstr(y_pos, current_x, char, style | curses.A_REVERSE)
-                    else:
-                        stdscr.addstr(y_pos, current_x, char, style)
-                    
-                    current_x += 1
-                    char_count += 1
-                    
-            if cursor >= len(buf):
-                stdscr.addstr(y_pos, current_x, " ", curses.A_REVERSE)
-                
-        # 2. Cascada de Texto Ampliada (10 líneas)
-        with telemetry_lock:
-            local_log_t = list(log_t)
-            local_log_o = list(log_o)
-            
-        stdscr.addstr(3, 2, "--------------------------------------------------------", curses.A_DIM)
-        for i in range(min(10, len(local_log_t))):
-            style = curses.A_BOLD if i == 0 else curses.A_DIM
-            if i < len(local_log_t):
-                stdscr.addstr(4 + i, 2, local_log_t[i], style)
-            if i < len(local_log_o):
-                stdscr.addstr(4 + i, 25, local_log_o[i], style)
-                
-        # Mostrar notificación de guardado temporal debajo de la cascada
-        if save_message and (time.time() - save_message_time < 2):
-            stdscr.addstr(14, 2, save_message, curses.A_BOLD)
-        else:
-            save_message = ""
+    engine = RPNEngine(sample_rate=sample_rate, t_step=t_step, t_den=t_den)
+    phase = PhasePortrait(width=40)
+    bits = BitPlanes(width=48)
+    scope = Waveform(width=64)
+    layout = LayoutManager(LAYOUTS[0])
+    layout_idx = 0
 
-        # 3. Osciloscopio más compacto
-        start_scope_y = 16
-        scope_height = max_y - start_scope_y - 1
-        scope_width = 64
-        
-        if scope_height > 3:
-            refs = [(255, "0xFF"), (128, "0x80"), (0, "0x00")]
-            for val, txt in refs:
-                y_offset = int((1.0 - (val / 255.0)) * (scope_height - 1))
-                stdscr.addstr(start_y := (start_scope_y + y_offset), 2, f"{txt} +", curses.A_DIM)
-                stdscr.addstr(start_y, 9, "-" * scope_width, curses.A_DIM)
-            
-            for xs in range(scope_width):
-                val = hist[(xs * 4) % 256]
-                y_offset = int((1.0 - (val / 255.0)) * (scope_height - 1))
-                stdscr.addstr(start_scope_y + y_offset, 9 + xs, "*")
+    with sd.OutputStream(channels=1, callback=engine.callback,
+                         samplerate=engine.SAMPLE_RATE,
+                         blocksize=engine.BUFFER_SIZE):
+        while True:
+            stdscr.erase()
+            max_y, max_x = stdscr.getmaxyx()
 
-        stdscr.refresh()
-        
-        try:
-            ch = stdscr.getkey()
-        except:
-            time.sleep(0.015)
-            continue
-            
-        if ch == 'q':
-            break
-        if ch == 'r':
-            global_t = 0
-        if ch == 's':
-            signed_mode = not signed_mode
-        if ch == '?':
-            show_help(stdscr)
-        if ch == ':':
-            result = fuzzfind(stdscr)
-            if result is not None:
-                with buffer_lock:
-                    save_to_undo()
-                    buf = result
-                    cursor = len(buf)
+            with editor.buffer_lock:
+                local_buf = editor.buf
+                local_cursor = editor.cursor
 
-        with buffer_lock:
-            if ch == 'h':
-                cursor = max(0, cursor - 1)
-            elif ch == 'l':
-                cursor = min(len(buf), cursor + 1)
-            elif ch == '$':
-                if cursor >= len(buf):
-                    cursor = 0
-                else:
-                    cursor = len(buf)
-            elif ch == 'u' and undo_stack:
-                buf = undo_stack.pop()
-                cursor = min(cursor, len(buf))
-            elif ch == 'w':
-                # Guardar expresión actual en un archivo de texto plano
+            with engine.telemetry_lock:
+                local_log_t = list(engine.log_t)
+                local_log_o = list(engine.log_o)
+
+            samples = list(engine.samples)
+
+            draw_expression(stdscr, local_buf, local_cursor,
+                            engine.signed_mode, y=layout.y('expr'))
+            draw_cascade(stdscr, local_log_t, local_log_o, y=layout.y('cascade'))
+
+            sep_y = layout.y('cascade') + 1
+            try:
+                stdscr.addstr(sep_y, 0, "-" * max_x, curses.A_DIM)
+            except Exception:
+                pass
+
+            bits.render(stdscr, 2, layout.y('bits'), samples,
+                        height=layout.h('bits'))
+
+            sep_y = layout.y('bits') + layout.h('bits')
+            try:
+                stdscr.addstr(sep_y, 0, "-" * max_x, curses.A_DIM)
+            except Exception:
+                pass
+
+            phase.render(stdscr, 2, layout.y('phase'), samples,
+                         height=layout.h('phase'))
+
+            sep_y = layout.y('phase') + layout.h('phase')
+            try:
+                stdscr.addstr(sep_y, 0, "-" * max_x, curses.A_DIM)
+            except Exception:
+                pass
+
+            min_val, peak = scope.render(stdscr, 2, layout.y('scope'), samples,
+                                         height=layout.h('scope'))
+
+            try:
+                stdscr.addstr(layout.y('labels'), 0,
+                              f"[{layout.name}] "
+                              f"min:0x{min_val:02X}  peak:0x{peak:02X}",
+                              curses.A_DIM)
+
+            except Exception:
+                pass
+
+            if editor.save_message and (time.time() - editor.save_message_time < 2):
                 try:
-                    with open("bytebeat_presets.txt", "a", encoding="utf-8") as f:
-                        f.write(buf + "\n")
-                    save_message = "[ Guardado en bytebeat_presets.txt ]"
-                except Exception as e:
-                    save_message = f"[ Error al guardar: {str(e)} ]"
-                save_message_time = time.time()
-            elif ch in ('KEY_BACKSPACE', '\b', '\x7f'):
-                if cursor > 0:
-                    save_to_undo()
-                    if cursor >= 2 and buf[cursor-2:cursor] in ('<<', '>>'):
-                        buf = buf[:cursor-2] + buf[cursor:]
-                        cursor -= 2
-                    else:
-                        buf = buf[:cursor-1] + buf[cursor:]
-                        cursor -= 1
-            elif ch == 'x' and buf:
-                save_to_undo()
-                op, op_start, op_len = get_operator_at(buf, cursor)
-                if op:
-                    buf = buf[:op_start] + buf[op_start+op_len:]
-                    cursor = min(op_start, len(buf))
-                else:
-                    if cursor < len(buf):
-                        buf = buf[:cursor] + buf[cursor+1:]
-                    if cursor >= len(buf) and cursor > 0:
-                        cursor = len(buf)
-            elif ch in ['j', 'k'] and buf:
-                # Evitar mutaciones si el cursor está al final en el espacio vacío
-                if cursor < len(buf):
-                    save_to_undo()
-                    dir_val = 1 if ch == 'k' else -1
-                    op, op_start, op_len = get_operator_at(buf, cursor)
-                    if op:
-                        idx = OPERATORS.index(op)
-                        new_op = OPERATORS[(idx + dir_val) % len(OPERATORS)]
-                        buf = buf[:op_start] + new_op + buf[op_start+op_len:]
-                        cursor = op_start
-                    elif buf[cursor].lower() in HEX_CHARS:
-                        idx = HEX_CHARS.index(buf[cursor].lower())
-                        buf = buf[:cursor] + HEX_CHARS[(idx + dir_val) % 16] + buf[cursor+1:]
-            elif ch in ['<', '>']:
-                save_to_undo()
-                ins = "<<" if ch == '<' else ">>"
-                buf = buf[:cursor] + ins + buf[cursor:]
-                cursor += 2
-            elif len(ch) == 1:
-                u_ch = ch.lower()
-                # Excluir 'w' y 'u' de la inserción directa para preservar sus atajos de control
-                if u_ch not in ['w', 'u'] and (u_ch in HEX_CHARS or ch in ['t', ' ', ','] or ch in OPERATORS):
-                    save_to_undo()
-                    buf = buf[:cursor] + ch + buf[cursor:]
-                    cursor += 1
+                    last_line = layout.y('labels')
+                    stdscr.addstr(last_line, max_x - len(editor.save_message) - 2,
+                                  editor.save_message, curses.A_BOLD)
+                except Exception:
+                    pass
+            else:
+                editor.save_message = ""
 
-    stream.stop()
+            stdscr.refresh()
+
+            try:
+                ch = stdscr.getkey()
+            except Exception:
+                time.sleep(0.015)
+                continue
+
+            if ch == 'q':
+                break
+            if ch == 'r':
+                engine.reset()
+            if ch == 's':
+                engine.signed_mode = not engine.signed_mode
+            if ch in ('\t', 'KEY_STAB'):
+                layout_idx = (layout_idx + 1) % len(LAYOUTS)
+                layout = LayoutManager(LAYOUTS[layout_idx])
+            if ch == '?':
+                show_help(stdscr)
+            if ch == ':':
+                result = fuzzfind(stdscr)
+                if result is not None:
+                    with editor.buffer_lock:
+                        editor.save_to_undo()
+                        editor.buf = result
+                        editor.cursor = len(editor.buf)
+
+            with editor.buffer_lock:
+                if ch == 'h':
+                    editor.cursor = max(0, editor.cursor - 1)
+                elif ch == 'l':
+                    editor.cursor = min(len(editor.buf), editor.cursor + 1)
+                elif ch == '$':
+                    if editor.cursor >= len(editor.buf):
+                        editor.cursor = 0
+                    else:
+                        editor.cursor = len(editor.buf)
+                elif ch == 'u' and editor.undo_stack:
+                    editor.buf = editor.undo_stack.pop()
+                    editor.cursor = min(editor.cursor, len(editor.buf))
+                elif ch == 'w':
+                    try:
+                        with open("bytebeat_presets.txt", "a", encoding="utf-8") as f:
+                            f.write(editor.buf + "\n")
+                        editor.save_message = "[ Guardado en bytebeat_presets.txt ]"
+                    except Exception as e:
+                        editor.save_message = f"[ Error al guardar: {str(e)} ]"
+                    editor.save_message_time = time.time()
+                elif ch in ('KEY_BACKSPACE', '\b', '\x7f'):
+                    if editor.cursor > 0:
+                        editor.save_to_undo()
+                        if editor.cursor >= 2 and editor.buf[editor.cursor-2:editor.cursor] in ('<<', '>>'):
+                            editor.buf = editor.buf[:editor.cursor-2] + editor.buf[editor.cursor:]
+                            editor.cursor -= 2
+                        else:
+                            editor.buf = editor.buf[:editor.cursor-1] + editor.buf[editor.cursor:]
+                            editor.cursor -= 1
+                elif ch == 'x' and editor.buf:
+                    editor.save_to_undo()
+                    op, op_start, op_len = editor.get_operator_at(editor.buf, editor.cursor)
+                    if op:
+                        editor.buf = editor.buf[:op_start] + editor.buf[op_start+op_len:]
+                        editor.cursor = min(op_start, len(editor.buf))
+                    else:
+                        if editor.cursor < len(editor.buf):
+                            editor.buf = editor.buf[:editor.cursor] + editor.buf[editor.cursor+1:]
+                        if editor.cursor >= len(editor.buf) and editor.cursor > 0:
+                            editor.cursor = len(editor.buf)
+                elif ch in ['j', 'k'] and editor.buf:
+                    if editor.cursor < len(editor.buf):
+                        editor.save_to_undo()
+                        dir_val = 1 if ch == 'k' else -1
+                        op, op_start, op_len = editor.get_operator_at(editor.buf, editor.cursor)
+                        if op:
+                            idx = editor.OPERATORS.index(op)
+                            new_op = editor.OPERATORS[(idx + dir_val) % len(editor.OPERATORS)]
+                            editor.buf = editor.buf[:op_start] + new_op + editor.buf[op_start+op_len:]
+                            editor.cursor = op_start
+                        elif editor.buf[editor.cursor].lower() in editor.HEX_CHARS:
+                            idx = editor.HEX_CHARS.index(editor.buf[editor.cursor].lower())
+                            editor.buf = editor.buf[:editor.cursor] + editor.HEX_CHARS[(idx + dir_val) % 16] + editor.buf[editor.cursor+1:]
+                elif ch in ['<', '>']:
+                    editor.save_to_undo()
+                    ins = "<<" if ch == '<' else ">>"
+                    editor.buf = editor.buf[:editor.cursor] + ins + editor.buf[editor.cursor:]
+                    editor.cursor += 2
+                elif len(ch) == 1:
+                    u_ch = ch.lower()
+                    if u_ch not in ['w', 'u'] and (u_ch in editor.HEX_CHARS or ch in ['t', ' ', ','] or ch in editor.OPERATORS):
+                        editor.save_to_undo()
+                        editor.buf = editor.buf[:editor.cursor] + ch + editor.buf[editor.cursor:]
+                        editor.cursor += 1
+
 
 if __name__ == '__main__':
-    curses.wrapper(main)
+    parser = argparse.ArgumentParser(description='sbb bytebeat editor')
+    parser.add_argument('--rate', type=int, default=8000,
+                        help='Sample rate in Hz (default: 8000). '
+                             'Rates > 8000 use fractional t-stepping.')
+    args = parser.parse_args()
 
+    if args.rate > 8000:
+        kwargs = {'sample_rate': args.rate, 't_step': 8000, 't_den': args.rate}
+    else:
+        kwargs = {'sample_rate': 8000, 't_step': 1, 't_den': 1}
+
+    curses.wrapper(lambda stdscr: main(stdscr, **kwargs))

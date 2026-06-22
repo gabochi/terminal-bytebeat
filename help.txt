@@ -14,6 +14,9 @@ KEYBINDINGS
   $           Toggle cursor to start / end of expression
   r           Reset time variable t to 0
   s           Toggle signed/unsigned arithmetic mode
+  ] / [       Next / previous preset
+  n / p       Next / previous preset
+  Ctrl+R      Random preset
   :           Open preset browser (type to filter ↓↑ Enter)
   ?           This help screen
   q           Quit

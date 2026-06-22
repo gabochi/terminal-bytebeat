@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import curses
+import random
 import sounddevice as sd
 import time
 
@@ -134,6 +135,7 @@ def main(stdscr, sample_rate=8000, t_step=1, t_den=1):
     with sd.OutputStream(channels=1, callback=engine.callback,
                          samplerate=engine.SAMPLE_RATE,
                          blocksize=engine.BUFFER_SIZE):
+        preset_idx = -1
         while True:
             stdscr.erase()
             max_y, max_x = stdscr.getmaxyx()
@@ -224,6 +226,25 @@ def main(stdscr, sample_rate=8000, t_step=1, t_den=1):
                         editor.save_to_undo()
                         editor.buf = result
                         editor.cursor = len(editor.buf)
+
+            presets = editor.load_presets()
+            if ch in (']', 'n') and presets:
+                preset_idx = (preset_idx + 1) % len(presets)
+                with editor.buffer_lock:
+                    editor.save_to_undo()
+                    editor.buf = presets[preset_idx]
+                    editor.cursor = len(editor.buf)
+            elif ch in ('[', 'p') and presets:
+                preset_idx = (preset_idx - 1) % len(presets)
+                with editor.buffer_lock:
+                    editor.save_to_undo()
+                    editor.buf = presets[preset_idx]
+                    editor.cursor = len(editor.buf)
+            elif ch == '\x12' and presets:
+                with editor.buffer_lock:
+                    editor.save_to_undo()
+                    editor.buf = random.choice(presets)
+                    editor.cursor = len(editor.buf)
 
             with editor.buffer_lock:
                 if ch == 'h':

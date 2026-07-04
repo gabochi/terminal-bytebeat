@@ -24,7 +24,8 @@ class SBB3D:
         self.save_msg = ""
         self.save_msg_time = 0
         self.preset_idx = -1
-        self.angle = 0.0
+        self.angle_y = 0.0
+        self.angle_x = 0.0
         self.fov = 500
         self.auto_rotate = True
         self.shape_idx = 0
@@ -128,6 +129,12 @@ class SBB3D:
             return
         if ch == ' ':
             self.auto_rotate = not self.auto_rotate
+            return
+        if ch == 'i':
+            self.fov = min(1500, self.fov + 50)
+            return
+        if ch == 'o':
+            self.fov = max(200, self.fov - 50)
             return
         if ch == ':':
             self.fuzzy_find()
@@ -246,7 +253,8 @@ class SBB3D:
         shape.deform(samples)
 
         if self.auto_rotate:
-            self.angle += 0.008
+            self.angle_y += 0.008
+            self.angle_x += 0.001
 
         if shape.fixed_cam_dist is not None:
             cam_dist = shape.fixed_cam_dist
@@ -256,7 +264,7 @@ class SBB3D:
 
         v = pygame.Surface((self.WIDTH, self.view_h))
         v.fill((0, 0, 0))
-        shape.render(v, self.fov, self.WIDTH, self.view_h, self.angle, cam_pos)
+        shape.render(v, self.fov, self.WIDTH, self.view_h, self.angle_y, self.angle_x, cam_pos)
         self.screen.blit(v, (0, self.view_y))
 
         self.render_expression(local_buf, local_cursor, self.engine.signed_mode)
@@ -312,7 +320,7 @@ class SBB3D:
 
         mode = "SIGNED" if self.engine.signed_mode else "UNSIGNED"
         rot = "AUTO" if self.auto_rotate else "MANUAL"
-        text = f"{mode}  {self.shape.name.upper()}  {rot}  {text}"
+        text = f"{mode}  {self.shape.name.upper()}  {rot}  FOV:{self.fov}  {text}"
 
         s = self.small_font.render(text, True, (0x66, 0x66, 0x66))
         self.screen.blit(s, (8, self.status_y + 4))

@@ -23,12 +23,9 @@ class Sphere(Shape):
         self.verts = self.base.copy()
         self.edges = []
         self.line_groups = []
-        for j in range(nlon):
-            lat = [j * nlat + i for i in range(nlat)]
-            self.line_groups.append((lat, True))
         for i in range(nlat):
-            lon = [j * nlat + i for j in range(nlon)]
-            self.line_groups.append((lon, False))
+            ring = [j * nlat + i for j in range(nlon)]
+            self.line_groups.append((ring, True))
         self.radius = radius + 0.5
 
     def deform(self, samples):

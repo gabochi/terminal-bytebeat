@@ -40,18 +40,21 @@ class BitVoxels(Shape):
         hw = grid * spacing / 2
         self.radius = np.linalg.norm([hw, hw, hw]) + cross_size + 0.5
 
-        # bit_buf[z][y][x] — z scrolls (time), y scrolls (samples), x = bit
         self.bit_buf = np.zeros((grid, grid, grid), dtype=bool)
 
     def deform(self, samples):
         if not samples:
             return
         g = self.grid
-        self.bit_buf = np.roll(self.bit_buf, 1, axis=0)
-        self.bit_buf[0] = np.roll(self.bit_buf[0], 1, axis=0)
-        s = samples[0]
-        for xi in range(g):
-            self.bit_buf[0, 0, xi] = bool((s >> xi) & 1)
+        ns = len(samples)
+
+        self.bit_buf[:-1] = self.bit_buf[1:]
+
+        for yi in range(g):
+            for xi in range(g):
+                si = (yi * g + xi) % ns
+                s = samples[si]
+                self.bit_buf[-1, yi, xi] = bool((s >> xi) & 1)
 
         self.verts = self.base.copy()
         for vi in range(g ** 3):

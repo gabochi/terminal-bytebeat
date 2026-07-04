@@ -16,7 +16,7 @@ class Pyramid(Shape):
         nv = 1 + n_steps * n_sides
 
         self.base = np.zeros((nv, 3), dtype=np.float32)
-        self.base[0] = [0, height / 2, 0]  # apex
+        self.base[0] = [0, height / 2, 0]
         for l in range(1, n_steps + 1):
             t = l / n_steps
             r = t * base_r
@@ -45,13 +45,12 @@ class Pyramid(Shape):
             return
         self.verts = self.base.copy()
         ns = len(samples)
-        for idx in range(1, len(self.base)):
-            l = (idx - 1) // self.n_sides
-            s = (idx - 1) % self.n_sides
-            t = (l + 1) / self.n_steps
-            sample_val = samples[(s + l * 3) % ns] / 255.0 * 0.6 * t
+        for idx in range(len(self.base)):
+            s = samples[idx % ns]
+            val = (s - 128) / 128.0 * 1.2
             v = self.base[idx]
             r = np.linalg.norm([v[0], v[2]])
             if r > 1e-6:
-                self.verts[idx, 0] += v[0] / r * sample_val
-                self.verts[idx, 2] += v[2] / r * sample_val
+                self.verts[idx, 0] += v[0] / r * val
+                self.verts[idx, 2] += v[2] / r * val
+            self.verts[idx, 1] += val * 0.6

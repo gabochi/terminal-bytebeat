@@ -3,14 +3,19 @@ import numpy as np
 import pygame
 
 
-def render_wireframe(surf, verts, edges, fov, sw, sh, angle, cam_pos,
+def render_wireframe(surf, verts, edges, fov, sw, sh, angle_y, angle_x, cam_pos,
                      line_groups=None):
-    c, s = math.cos(angle), math.sin(angle)
-    cx, cy, cz = cam_pos
+    cy, sy = math.cos(angle_y), math.sin(angle_y)
+    cx, sx = math.cos(angle_x), math.sin(angle_x)
+    cx_pos, cy_pos, cz_pos = cam_pos
 
-    x = verts[:, 0] * c - verts[:, 2] * s - cx
-    z = verts[:, 0] * s + verts[:, 2] * c - cz
-    y = verts[:, 1] - cy
+    x1 = verts[:, 0] * cy - verts[:, 2] * sy
+    z1 = verts[:, 0] * sy + verts[:, 2] * cy
+    y1 = verts[:, 1]
+
+    y = y1 * cx - z1 * sx - cy_pos
+    z = y1 * sx + z1 * cx - cz_pos
+    x = x1 - cx_pos
 
     near, far = 0.5, 60.0
     mask = (z > near) & (z < far)
@@ -75,6 +80,6 @@ class Shape:
     def deform(self, samples):
         """Update self.verts from self.base using audio samples."""
 
-    def render(self, surf, fov, sw, sh, angle, cam_pos):
+    def render(self, surf, fov, sw, sh, angle_y, angle_x, cam_pos):
         render_wireframe(surf, self.verts, self.edges, fov, sw, sh,
-                         angle, cam_pos, self.line_groups)
+                         angle_y, angle_x, cam_pos, self.line_groups)

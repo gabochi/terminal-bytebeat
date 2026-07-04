@@ -45,12 +45,16 @@ class PhaseRibbon(Shape):
             ]
         self.verts = self.buf.copy()
 
-    def render(self, surf, fov, sw, sh, angle, cam_pos):
-        c, s = math.cos(angle), math.sin(angle)
-        cx, cy, cz = cam_pos
-        x = self.verts[:, 0] * c - self.verts[:, 2] * s - cx
-        z = self.verts[:, 0] * s + self.verts[:, 2] * c - cz
-        y = self.verts[:, 1] - cy
+    def render(self, surf, fov, sw, sh, angle_y, angle_x, cam_pos):
+        cy, sy = math.cos(angle_y), math.sin(angle_y)
+        cx, sx = math.cos(angle_x), math.sin(angle_x)
+        cx_pos, cy_pos, cz_pos = cam_pos
+        x1 = self.verts[:, 0] * cy - self.verts[:, 2] * sy
+        z1 = self.verts[:, 0] * sy + self.verts[:, 2] * cy
+        y1 = self.verts[:, 1]
+        y = y1 * cx - z1 * sx - cy_pos
+        z = y1 * sx + z1 * cx - cz_pos
+        x = x1 - cx_pos
         near, far = 0.5, 60.0
         mask = (z > near) & (z < far)
         f_arr = fov / np.maximum(z, near)

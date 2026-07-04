@@ -36,13 +36,17 @@ class Terrain(Shape):
         y = self.samples_buf.astype(np.float32) / 255.0 * self.height_scale
         self.verts = np.stack([self.base_x, y, self.base_z], axis=-1)
 
-    def render(self, surf, fov, sw, sh, angle, cam_pos):
-        c, s = math.cos(angle), math.sin(angle)
-        cx, cy, cz = cam_pos
+    def render(self, surf, fov, sw, sh, angle_y, angle_x, cam_pos):
+        cy, sy = math.cos(angle_y), math.sin(angle_y)
+        cx, sx = math.cos(angle_x), math.sin(angle_x)
+        cx_pos, cy_pos, cz_pos = cam_pos
         td, tw, _ = self.verts.shape
-        x = self.verts[:, :, 0] * c - self.verts[:, :, 2] * s - cx
-        z = self.verts[:, :, 0] * s + self.verts[:, :, 2] * c - cz
-        y = self.verts[:, :, 1] - cy
+        x1 = self.verts[:, :, 0] * cy - self.verts[:, :, 2] * sy
+        z1 = self.verts[:, :, 0] * sy + self.verts[:, :, 2] * cy
+        y1 = self.verts[:, :, 1]
+        y = y1 * cx - z1 * sx - cy_pos
+        z = y1 * sx + z1 * cx - cz_pos
+        x = x1 - cx_pos
         near, far = 0.5, 60.0
         f = fov / np.maximum(z, near)
         sx = (sw // 2 + (x * f)).astype(int)
